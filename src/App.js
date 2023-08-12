@@ -1,5 +1,6 @@
 import React, { Component } from 'react';
-import { BrowserRouter as Router, Route } from 'react-router-dom';
+import PropTypes from 'prop-types';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import Input from './Input';
 import SearchResults from './SearchResults';
 import SetUnits from './SetUnits';
@@ -16,6 +17,7 @@ class App extends Component {
       isLoading: false,
       isError: false,
     };
+    this.inputRef = React.createRef(); // Create a ref
   }
 
   componentDidMount() {
@@ -28,18 +30,98 @@ class App extends Component {
     }
   }
 
+  // searchLocations = debounce(keyword => {
+  //   if (keyword.trim() !== "") {
+  //     fetch(`http://api.weatherstack.com/current?access_key=0701b8cf7d8ef13a050ade1acee551bb&query=${keyword}`)
+  //       .then(response => response.json())
+  //       .then(data => {
+  //         this.setState({ searchResults: data });
+  //       })
+  //       .catch(error => {
+  //         console.error("Error fetching search results:", error);
+  //       });
+  //   } else {
+  //     this.setState({ searchResults: [] });
+  //   }
+  // }, 300);
+
   searchLocations = debounce(keyword => {
-    // Implement the API call to search locations based on the keyword
-    // Update the searchResults state with the fetched data
+    if (keyword.trim() !== "") {
+      fetch(`http://api.weatherstack.com/current?access_key=0701b8cf7d8ef13a050ade1acee551bb&query=${keyword}`)
+        .then(response => response.json())
+        .then(data => {
+          if (data.location) {
+            // If location data is available in the response
+            const location = {
+              id: data.location.lat + data.location.lon, // Create a unique ID using lat and lon
+              name: data.location.name
+            };
+            this.setState({ searchResults: [location] }); // Update the searchResults state
+          } else {
+            this.setState({ searchResults: [] }); // No matching location found
+          }
+        })
+        .catch(error => {
+          console.error("Error fetching search results:", error);
+        });
+    } else {
+      this.setState({ searchResults: [] });
+    }
   }, 300);
+  
+
+  // getWeather = () => {
+  //   const { selectedLocation, temperatureUnits } = this.state;
+  //   if (selectedLocation) {
+  //     const unitsParam = temperatureUnits === 'C' ? 'C' : 'F';
+
+  //     fetch(`https://api.weatherserver.com/weather/current/${selectedLocation.id}/${unitsParam}`)
+  //       .then(response => response.json())
+  //       .then(data => {
+  //         this.setState({
+  //           selectedLocation: {
+  //             ...selectedLocation,
+  //             weatherData: data
+  //           },
+  //           isLoading: false,
+  //           isError: false
+  //         });
+  //       })
+  //       .catch(error => {
+  //         console.error("Error fetching weather data:", error);
+  //         this.setState({ isLoading: false, isError: true });
+  //       });
+
+  //     this.setState({ isLoading: true, isError: false });
+  //   }
+  // };
 
   getWeather = () => {
     const { selectedLocation, temperatureUnits } = this.state;
     if (selectedLocation) {
-      // Implement the API call to fetch weather data for the selected location and units
-      // Update the selectedLocation state with the fetched data
+      const unitsParam = temperatureUnits === 'C' ? 'm' : 'f'; // Use 'm' for Celsius and 'f' for Fahrenheit
+  
+      fetch(`http://api.weatherstack.com/current?access_key=0701b8cf7d8ef13a050ade1acee551bb&query=${selectedLocation.name},${selectedLocation.country}&unit=${unitsParam}`)
+        .then(response => response.json())
+        .then(data => {
+          this.setState({
+            selectedLocation: {
+              ...selectedLocation,
+              weatherData: data.current // Use the "current" object from the API response
+            },
+            isLoading: false,
+            isError: false
+          });
+        })
+        .catch(error => {
+          console.error("Error fetching weather data:", error);
+          this.setState({ isLoading: false, isError: true });
+        });
+  
+      this.setState({ isLoading: true, isError: false });
     }
   };
+  
 
   handleLocationSelect = location => {
     this.setState({ selectedLocation: location }, this.getWeather);
@@ -55,28 +137,36 @@ class App extends Component {
     return (
       <Router>
         <div className="app">
-          <Input onSearch={this.searchLocations} />
-          <SearchResults
-            results={searchResults}
-            onSelectLocation={this.handleLocationSelect}
-          />
+          <Input ref={this.inputRef} onSearch={this.searchLocations} />
+          <SearchResults results={searchResults} onLocationSelect={this.handleLocationSelect} />
+          {/* <SearchResults results={searchResults} onSelectLocation={this.handleLocationSelect} /> */}
           <SetUnits units={temperatureUnits} onChange={this.handleUnitChange} />
-          <Route
-            path="/"
-            exact
-            render={() => (
-              <WeatherReport
-                location={selectedLocation}
-                units={temperatureUnits}
-                isLoading={isLoading}
-                isError={isError}
-              />
-            )}
-          />
+          <Routes>
+            <Route
+              path="/"
+              element={
+                selectedLocation && selectedLocation.weatherData && (
+                  <WeatherReport
+                    weatherData={selectedLocation.weatherData}
+                    units={temperatureUnits}
+                  />
+                )}
+                
+            />
+          </Routes>
         </div>
       </Router>
     );
   }
 }
+
+// Use PropTypes for type-checking
+App.propTypes = {
+  searchResults: PropTypes.array,
+  selectedLocation: PropTypes.object,
+  temperatureUnits: PropTypes.string,
+  isLoading: PropTypes.bool,
+  isError: PropTypes.bool,
+};
 
 export default App;
